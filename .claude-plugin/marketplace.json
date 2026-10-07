@@ -1,0 +1,18 @@
+{
+  "name": "iphone-duo-skill",
+  "owner": {
+    "name": "bones7456"
+  },
+  "metadata": {
+    "description": "Claude Code skills for adapting iOS apps to iPhone Duo (Apple's foldable iPhone)."
+  },
+  "plugins": [
+    {
+      "name": "iphone-duo",
+      "source": "./plugins/iphone-duo",
+      "description": "Adapt an existing iOS app (SwiftUI or UIKit) to iPhone Duo: environment setup, static audit, layout fixes, simulator test matrix, App Store screenshots.",
+      "version": "1.0.0",
+      "category": "development"
+    }
+  ]
+}
