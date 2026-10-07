@@ -1,6 +1,7 @@
 # iphone-duo-skill
 
-A [Claude Code](https://claude.com/claude-code) plugin that helps adapt an existing iOS app
+A plugin for [Claude Code](https://claude.com/claude-code) and
+[Codex](https://github.com/openai/codex) that helps adapt an existing iOS app
 (SwiftUI or UIKit) to **iPhone Duo**, Apple's foldable iPhone.
 
 It is a field guide distilled from adapting a real shipping SwiftUI app, covering:
@@ -15,25 +16,46 @@ It is a field guide distilled from adapting a real shipping SwiftUI app, coverin
 
 ## Install
 
-In Claude Code:
+### Claude Code
 
 ```
 /plugin marketplace add bones7456/iphone-duo-skill
 /plugin install iphone-duo@iphone-duo-skill
 ```
 
+### Codex
+
+```
+codex plugin marketplace add bones7456/iphone-duo-skill
+codex plugin add iphone-duo@iphone-duo-skill
+```
+
+Tested with codex-cli 0.155.1, which reads the same `.claude-plugin/marketplace.json`.
+
+### Usage
+
 Then just ask, e.g. "get my app ready for iPhone Duo" or "帮我把这个 App 适配 iPhone Duo 折叠屏".
 The skill is invoked as `iphone-duo:iphone-duo-adaptation`.
 
 ### Without the plugin system
 
-Copy `plugins/iphone-duo/skills/iphone-duo-adaptation/` into `~/.claude/skills/` (personal) or
-`<project>/.claude/skills/` (per project).
+Copy `plugins/iphone-duo/skills/iphone-duo-adaptation/` into:
+
+- Claude Code: `~/.claude/skills/` (personal) or `<project>/.claude/skills/` (per project)
+- Codex: `~/.codex/skills/`
 
 ## Update
 
+Claude Code:
+
 ```
 /plugin marketplace update iphone-duo-skill
+```
+
+Codex:
+
+```
+codex plugin marketplace upgrade iphone-duo-skill
 ```
 
 ## Caveats
