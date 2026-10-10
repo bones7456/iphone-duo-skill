@@ -11,7 +11,7 @@
       "name": "iphone-duo",
       "source": "./plugins/iphone-duo",
       "description": "Adapt an existing iOS app (SwiftUI or UIKit) to iPhone Duo: environment setup, static audit, layout fixes, simulator test matrix, App Store screenshots.",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "category": "development"
     }
   ]

@@ -189,6 +189,10 @@ For each **primary** screen, design a deliberate wide layout:
 - **Balance the columns.** A short card next to a tall one leaves a dead corner. Make the
   columns equal height (`fixedSize` pattern, pitfall 1) and let a flexible element absorb the slack
   (a `TextEditor` with `maxHeight: .infinity`, the submit button pinned at the card's bottom).
+- **Keep the left column in view.** With the result running on in the right column, the left
+  card scrolled away and left the whole left half empty *(verified, user feedback)*. Make it
+  sticky with a **render-time** offset (`visualEffect` reading `proxy.frame(in: .scrollView)`,
+  clamped to the row height) — not layout, so it can't feed back (pattern 6).
 - **Re-compose, don't just widen.** A 2-up image row that worked at 400 pt became tiny in a 380 pt
   side column; restacking it as rows (image beside the word, "vs" divider between) filled the
   column and made the images larger. Give the new arrangement its own opt-in parameter so the
@@ -230,7 +234,15 @@ sheets on the inner display, which is usually fine as-is.
 ## App Store
 
 - **Screenshots** *(Apple's spec)*: outer 1398×2034 (or 2034×1398), inner 2007×2853 (or 2853×2007).
-  Not required yet; **required for new submissions from April 2027**. The ~1.42–1.46 aspect ratio
+  Not required yet; **required for new submissions from April 2027**.
+  - **API display type `APP_IPHONE_DUO`** — not in Apple's OpenAPI enum yet, but accepted. One set
+    holds both displays. Uploading 5 inner-landscape 2853×2007 shots through the API (reserve
+    `POST /v1/appScreenshots` → PUT each `uploadOperations` chunk → `PATCH uploaded:true` + md5)
+    reached `assetDeliveryState: COMPLETE` and passed submission *(verified, Oct 2026)*.
+  - A new App Store version **inherits the previous version's screenshot sets**; add only the Duo set.
+  - Capture the right display (`--display=3` while unfolded), signed build, signed in if the
+    screens need account data; long screens need the user to scroll — the sticky-column fix
+    above was found exactly while capturing, so capture *before* the final build if you can. The ~1.42–1.46 aspect ratio
   is far from regular iPhones (~2.17), so existing marketing layouts need a new template, and the
   in-app screenshots should be captured on the Duo simulator.
 - iOS 27 **product page header** (21:9) and search-results creative assets are shared with other

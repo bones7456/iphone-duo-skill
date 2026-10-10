@@ -226,6 +226,29 @@ struct SolveView: View {
     }
 }
 ```
+**Sticky left column.** When the right column is much longer (a result), the left card scrolls away
+and leaves the left half empty. Pin it with a render-time offset — `visualEffect` doesn't take part
+in layout, so reading geometry there can't loop. The row height it clamps to is measured into
+state that only the effect reads:
+
+```swift
+@State private var rowHeight: CGFloat = 0
+
+HStack(alignment: .top, spacing: 24) {
+    PuzzleCard(...)
+        .frame(width: leftWidth)
+        .visualEffect { [rowHeight] content, proxy in
+            let frame = proxy.frame(in: .scrollView)
+            let lift = max(0, 16 - frame.minY)                 // keep 16 pt from the viewport top
+            return content.offset(y: min(lift, max(0, rowHeight - frame.height)))
+        }
+    VStack(spacing: 24) { stage }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+}
+.fixedSize(horizontal: false, vertical: true)
+.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { rowHeight = $0 }   // rendering only
+```
+
 Inside the right column, let one flexible element absorb the extra height in the wide layout only:
 `TextEditor(...).frame(minHeight: 150, maxHeight: isWide ? .infinity : nil)` and the editor card
 `.frame(maxHeight: isWide ? .infinity : nil, alignment: .top)` before its background.
