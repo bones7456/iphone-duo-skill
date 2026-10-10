@@ -189,8 +189,11 @@ private struct MeasuresHostWidth: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environment(\.hostWidth, width)
-            // Width only: it doesn't change with scrolling, title collapse or the keyboard.
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            // Width only (it doesn't change with scrolling, title collapse or the keyboard),
+            // rounded, and only real changes: sub-pixel creep under an animation looped once.
+            .onGeometryChange(for: CGFloat.self) { $0.size.width.rounded() } action: { w in
+                if abs(w - width) >= 1 { width = w }
+            }
     }
 }
 extension View { func measuresHostWidth() -> some View { modifier(MeasuresHostWidth()) } }
@@ -228,25 +231,21 @@ struct SolveView: View {
 ```
 **Sticky left column.** When the right column is much longer (a result), the left card scrolls away
 and leaves the left half empty. Pin it with a render-time offset — `visualEffect` doesn't take part
-in layout, so reading geometry there can't loop. The row height it clamps to is measured into
-state that only the effect reads:
+in layout, so reading geometry there can't loop. Don't clamp it to a measured row height: that
+adds state, and when the row is the last thing on the page with a card shorter than the viewport
+the card can't run past the content anyway.
 
 ```swift
-@State private var rowHeight: CGFloat = 0
-
 HStack(alignment: .top, spacing: 24) {
     PuzzleCard(...)
         .frame(width: leftWidth)
-        .visualEffect { [rowHeight] content, proxy in
-            let frame = proxy.frame(in: .scrollView)
-            let lift = max(0, 16 - frame.minY)                 // keep 16 pt from the viewport top
-            return content.offset(y: min(lift, max(0, rowHeight - frame.height)))
+        .visualEffect { content, proxy in                      // keep 16 pt from the viewport top
+            content.offset(y: max(0, 16 - proxy.frame(in: .scrollView).minY))
         }
     VStack(spacing: 24) { stage }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 }
 .fixedSize(horizontal: false, vertical: true)
-.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { rowHeight = $0 }   // rendering only
 ```
 
 Inside the right column, let one flexible element absorb the extra height in the wide layout only:

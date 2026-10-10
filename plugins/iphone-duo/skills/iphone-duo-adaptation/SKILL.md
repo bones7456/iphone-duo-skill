@@ -75,6 +75,11 @@ changes how urgent the work is.
   `scripts/duo_sim.sh build <proj-or-workspace> <scheme>` (signed, `-allowProvisioningUpdates`,
   destination = the Duo's UDID). `codesign -d --entitlements` shows nothing for simulator builds;
   check with `strings <App>.app/<binary> | grep <entitlement-key>` instead.
+- **A local backend may fail Sign in with Apple** (here `wrangler dev` couldn't fetch Apple's JWKS:
+  "Expected 200 OK from the JSON Web Key Set") while Apple's sheet itself succeeds. To test signed-in
+  flows locally, insert a test user + session row into the local DB and write the token into the
+  app's stored defaults (`xcrun simctl spawn booted defaults write <bundle> <tokenKey> <token>`).
+  A DEBUG-only launch argument for the API base URL lets the simulator talk to the local backend.
 - **App Attest is unavailable in the simulator.** Flows that require an attestation (anonymous
   API calls, etc.) can't be exercised there; test them signed in, or ask the user before enabling
   any server-side bypass.
@@ -104,12 +109,26 @@ you switch is the same feedback shape and is only safe while every branch fills 
 - Measure the **host** (the ScrollView / container), never the content you switch, and pass the
   value down through the environment (`measuresHostWidth()` in the patterns file).
 - Measure **width only**. Width doesn't change with scrolling, title collapse or the keyboard.
+- **Round it and ignore changes under 1 pt** *(verified, third hang)*: with a voice-result card on
+  screen, the host's width crept 867.0 → 867.67 in sub-pixel steps under an animation; every tiny
+  change re-rendered the page, which restarted the creep — 100 % CPU even though only width was
+  measured. `$0.size.width.rounded()` plus `if abs(new - old) >= 1` breaks it whatever the source.
+- Don't add measured state just for polish. A sticky column clamped to a measured row height was a
+  second state to oscillate; the unclamped render-time offset (pattern 6) is enough when the row is
+  last on the page and the card is shorter than the viewport.
+- No custom wrapping `Layout` inside a `fixedSize` two-column row — a hand-rolled flow layout was
+  the first suspect here; a horizontal `ScrollView { HStack }` is predictable.
 - Never derive a content height from a measured viewport height. For side-by-side columns of equal
   height use `HStack { a; b.frame(maxHeight: .infinity) }.fixedSize(horizontal: false, vertical: true)`.
   Size images from width (`min(maxSide, columnWidth - padding - labelWidth)`), not from height.
 - After any wide-layout change, run the real flow on the unfolded device, **scroll the longest
   screen**, and check `ps -o %cpu -p <pid>` stays ~0 when idle. `scripts/duo_sim.sh hang <bundle-id>`
   does the CPU check and summarises a `sample`.
+- **Find the looping state, don't bisect views**: add `let _ = Self._printChanges()` at the top of the
+  suspect view's `body`, launch with `xcrun simctl launch --console-pty booted <bundle>` and count
+  the lines — "`_canvas changed` × 5487" names the culprit in one run. Then print the measured
+  value itself to see *how* it oscillates. Removing cards one by one took four rebuilds and was wrong
+  every time.
 
 ### 2. `NavigationView` becomes a split view — whole app squeezed into a sidebar *(verified, severe)*
 Both Duo displays report **regular horizontal size class**. A SwiftUI `NavigationView` (default
