@@ -8,10 +8,13 @@ It is a field guide distilled from adapting a real shipping SwiftUI app, coverin
 
 - **Environment setup** — Xcode 27.1, iOS 27.1 runtime, DeviceHub
 - **Static audit** — `scripts/audit_duo.sh` greps for risky patterns
-- **Layout pitfalls on the inner display**, with tested fixes — `NavigationView` turning into a
-  split view, orientation locks ignored, safe-area gaps, over-stretched controls
-- **Simulator test matrix** — `scripts/duo_sim.sh` boots the Duo simulator and captures
-  screenshots of the right display
+- **Layout pitfalls on the inner display**, with tested fixes — wide-layout feedback loops that
+  hang the main thread, `NavigationView` turning into a split view, `NavigationSplitView` sidebars
+  washing out custom colors, orientation locks ignored, safe-area gaps, over-stretched controls
+- **Designing for the wide canvas** — balanced two-column layouts instead of a capped phone column
+- **Agent-friendly simulator loop** — `scripts/duo_sim.sh` boots the Duo, makes signed builds
+  (entitlements intact), captures screenshots and video of the right display, makes contact
+  sheets of recordings, and diagnoses hangs
 - **App Store work** — Duo screenshot sizes, deadlines, featuring nomination
 
 ## Install
@@ -60,7 +63,8 @@ codex plugin marketplace upgrade iphone-duo-skill
 
 ## Caveats
 
-Facts were verified on Xcode 27.1 RC (27A9275) with the iOS 27.1 simulator runtime in Oct 2026.
+Facts were verified on Xcode 27.1 RC (27A9275) with the iOS 27.1 simulator runtime in Oct 2026
+(v1.1.0 adds lessons from a second app: layout hangs, NavigationSplitView vibrancy, testing as an agent).
 iPhone Duo and its tooling are new; re-check dates and sizes against Apple's current docs.
 Corrections and issues are welcome.
 

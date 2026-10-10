@@ -7,8 +7,9 @@ Adjust the constants (700 pt threshold, 560 pt column) to the app's design.
 1. Readable single column for scroll pages
 2. Two columns on a wide + short canvas
 3. Readable List / Form
-4. List → detail with NavigationSplitView
+4. List → detail: one NavigationStack, two columns
 5. Covering the top strip above a pinned header
+6. Wide layout inside a ScrollView without feedback loops (host-measured width, equal-height columns)
 
 ---
 
@@ -40,8 +41,12 @@ FittingScrollView(maxContentWidth: 560) { _ in … }
 
 ## 2. Two columns on a wide + short canvas
 
-Unfolded-landscape inner display is ~890×626 pt. A single column there means giant buttons and a
-short canvas that hides secondary content; split it.
+Unfolded-landscape inner display is ~951×669 pt (27.1 SDK, edge-to-edge; ~820–850 pt usable beside
+the right rail). A single column there means giant buttons and a short canvas that hides secondary
+content; split it.
+
+Here the GeometryReader wraps the ScrollView (it measures the *host*), so switching branches can't
+change the measured size. Don't move the measurement onto the content you switch — see section 6.
 
 ```swift
 FittingScrollView { size in
@@ -85,46 +90,64 @@ Form { … }
     .readableListWidth()          // before .scrollContentBackground / .background
 ```
 
-## 4. List → detail with NavigationSplitView
+## 4. List → detail: one NavigationStack, two columns
 
-Do **not** hand-build this from an HStack of two NavigationStacks: each stack receives the whole
-window's trailing safe-area inset (~100 pt for Duo's right-side rail), so the left column shows a
-100 pt empty band on its right.
+Tested alternatives and why they lost:
+- `HStack` of two `NavigationStack`s: each embedded stack gets the window's whole trailing
+  safe-area inset (~100 pt for Duo's right-side rail) → a 100 pt empty band on the left column.
+- `NavigationSplitView`: the sidebar renders semantic-color fills (`Color.primary`) with vibrancy,
+  so custom drawing (calendar cells, badges) turns gray; `.listStyle(.insetGrouped)` doesn't help.
+  Fine for a plain text sidebar — notes for that case are at the end of this section.
 
 ```swift
 struct HistoryView: View {
-    @State private var selected: Item?
+    @State private var width: CGFloat = 0
+    @State private var selected: Item.ID?
+    @State private var path: [Item.ID] = []
+    private var isWide: Bool { width >= 700 }
 
     var body: some View {
-        GeometryReader { geo in
-            if geo.size.width >= 700 {
-                NavigationSplitView(columnVisibility: .constant(.all)) {
-                    ItemList(selection: $selected)                 // rows set `selected` instead of pushing
-                        .toolbar(removing: .sidebarToggle)
-                        .navigationSplitViewColumnWidth(360)        // MUST come after .toolbar(removing:)
-                } detail: {
-                    NavigationStack {
-                        if let selected {
-                            ItemDetail(item: selected).id(selected.id)   // fresh state per row
-                        } else {
-                            EmptyStateView()
+        Group {
+            if isWide {
+                NavigationStack {                       // ONE stack → one trailing inset, for the whole HStack
+                    HStack(spacing: 0) {
+                        ItemList(onOpen: { selected = $0 }, selection: selected)
+                            // beside a divider the list gets no trailing inset of its own
+                            .contentMargins(.trailing, 16, for: .scrollContent)
+                            .frame(width: 380)
+                        Rectangle().fill(.separator).frame(width: 1).ignoresSafeArea(edges: .bottom)
+                        Group {
+                            if let selected {
+                                ItemDetail(id: selected, embedded: true)   // embedded: sets no navigationTitle
+                                    .id(selected)                          // fresh state per row
+                            } else {
+                                ContentUnavailableView("Pick an item", systemImage: "list.bullet")
+                            }
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
-                .navigationSplitViewStyle(.balanced)               // not .prominentDetail (overlays + dims)
+                .onAppear { if selected == nil { selected = items.first?.id } }
             } else {
-                NavigationStack { ItemList(selection: nil) }       // original push navigation, unchanged
+                NavigationStack(path: $path) {          // original push navigation, unchanged
+                    ItemList(onOpen: { path.append($0) }, selection: nil)
+                        .navigationDestination(for: Item.ID.self) { ItemDetail(id: $0) }
+                }
             }
         }
+        // Measures the tab's root container, whose size doesn't depend on which branch is shown.
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
     }
 }
 ```
-In the list: `selection == nil` → `NavigationLink` as before; non-nil → `Button { selection = item }`
-with a selected-row highlight. On appear and when the data changes, select the first row if
-nothing (or a deleted item) is selected. Paywalled/locked rows keep their existing behavior.
-Extra row decorations for the wide layout (e.g., a score badge) should be opt-in flags so the
-narrow row renders exactly as before; overlay them in a corner rather than adding a trailing
-column, or they squeeze the row's text.
+In the list: `selection == nil` → `NavigationLink` as before; non-nil → `Button { onOpen(item.id) }`
+with `.buttonStyle(.plain)` and a selected-row `listRowBackground`. Paywalled/locked rows keep their
+existing behavior. Extra decorations for the wide layout should be opt-in flags so the narrow row
+renders exactly as before.
+
+If you do use `NavigationSplitView` (plain sidebar): `columnVisibility: .constant(.all)`,
+`.navigationSplitViewStyle(.balanced)` (not `.prominentDetail`, which floats + dims), and put
+`.navigationSplitViewColumnWidth(...)` **after** `.toolbar(removing: .sidebarToggle)` or it's ignored.
 
 ## 5. Covering the top strip above a pinned header
 
@@ -142,3 +165,71 @@ ScrollView {
 Putting `.ignoresSafeArea` on the pinned header itself does nothing — content inside a ScrollView
 doesn't get safe-area insets. The overlay sits outside the scroll content, so it can extend into
 the top safe area. On iPhone that strip is under the navigation bar and stays invisible.
+
+## 6. Wide layout inside a ScrollView without feedback loops
+
+Both of these hung the main thread at 100 % CPU (spinner still spinning, so it looked like a slow
+network): (a) `onGeometryChange` on the content you switch, driving `if width >= 760 {HStack} else
+{VStack}`; (b) sizing a card from the ScrollView's height (`containerRelativeFrame(.vertical)` or a
+measured height) — that height moves with the collapsing large title and the keyboard.
+
+Measure the **host ScrollView's width only** and hand it down:
+
+```swift
+struct HostWidthKey: EnvironmentKey { static let defaultValue: CGFloat = 0 }
+extension EnvironmentValues {
+    var hostWidth: CGFloat {
+        get { self[HostWidthKey.self] }
+        set { self[HostWidthKey.self] = newValue }
+    }
+}
+
+private struct MeasuresHostWidth: ViewModifier {
+    @State private var width: CGFloat = 0
+    func body(content: Content) -> some View {
+        content
+            .environment(\.hostWidth, width)
+            // Width only: it doesn't change with scrolling, title collapse or the keyboard.
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+    }
+}
+extension View { func measuresHostWidth() -> some View { modifier(MeasuresHostWidth()) } }
+
+// Host:
+ScrollView {
+    SolveView(puzzle: puzzle).padding(16)
+}
+.measuresHostWidth()          // on the ScrollView, never on SolveView
+
+// Content:
+struct SolveView: View {
+    @Environment(\.hostWidth) private var hostWidth
+    private var contentWidth: CGFloat { hostWidth - 32 }      // minus the host's padding
+    private var isWide: Bool { contentWidth >= 760 }
+    private var leftWidth: CGFloat { min(440, contentWidth * 0.45) }
+
+    var body: some View {
+        if isWide {
+            HStack(alignment: .top, spacing: 24) {
+                PuzzleCard(stackedImageSide: min(210, leftWidth - 48 - 24 - 120))  // sized from width
+                    .frame(width: leftWidth)
+                VStack(spacing: 24) { stage }                       // editor / result
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            }
+            // HStack takes its tallest child; the right column stretches to at least the left
+            // card's height, a longer result just runs on. No measured heights anywhere.
+            .fixedSize(horizontal: false, vertical: true)
+        } else {
+            VStack(spacing: 24) { PuzzleCard(stackedImageSide: nil); stage }   // unchanged iPhone layout
+                .frame(maxWidth: 560).frame(maxWidth: .infinity)
+        }
+    }
+}
+```
+Inside the right column, let one flexible element absorb the extra height in the wide layout only:
+`TextEditor(...).frame(minHeight: 150, maxHeight: isWide ? .infinity : nil)` and the editor card
+`.frame(maxHeight: isWide ? .infinity : nil, alignment: .top)` before its background.
+
+Verify: unfold, run the real flow to the longest state, scroll it, then
+`ps -o %cpu -p $(pgrep -f '<App>.app/<App>$')` should read ~0 when idle.
+

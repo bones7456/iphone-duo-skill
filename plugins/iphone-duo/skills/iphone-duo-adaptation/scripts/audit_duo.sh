@@ -38,7 +38,7 @@ check MED "Orientation-based layout" \
   "Compare actual width/height instead; orientation doesn't describe the window on Duo." \
   'UIDevice\.current\.orientation|statusBarOrientation|\binterfaceOrientation\b'
 check MED "Orientation lock / forced rotation" \
-  "Portrait locks were ignored on the Duo inner display; every screen must lay out in 890x626 landscape." \
+  "Portrait locks were ignored on the Duo inner display; every screen must lay out in ~951x669 pt landscape." \
   'supportedInterfaceOrientations|requestGeometryUpdate|UISupportedInterfaceOrientations'
 check MED "Idiom checks" \
   "Choose layout by available space, not .phone/.pad." \
@@ -47,8 +47,17 @@ check MED "Regular width treated as iPad" \
   "Duo reports regular width; don't map size class to device." \
   'horizontalSizeClass\s*==\s*\.regular|\.regular\s*==\s*horizontalSizeClass'
 check MED "Hard-coded device sizes" \
-  "Device lists / exact heights won't match Duo (626x890, 466x678 pt)." \
+  "Device lists / exact heights won't match Duo (~669x951 inner, 466x678 outer pt)." \
   '(bounds|frame|size)\.(height|width)\s*==\s*[0-9]{3}|iPhone ?1[0-9] ?Pro|deviceModel|utsname'
+check MED "NavigationSplitView" \
+  "Its sidebar renders Color.primary fills with vibrancy (custom-drawn cells turn gray); for a sidebar with custom drawing prefer one NavigationStack with an HStack of two columns. See pitfall 5." \
+  'NavigationSplitView'
+check MED "Height-relative sizing" \
+  "Sizing content from a scroll container's height moves with the collapsing large title / keyboard and looped the layout (main thread at 100%). Size from width; equalize columns with fixedSize. See pitfall 1." \
+  'containerRelativeFrame\(\.vertical|containerRelativeFrame\(\[\.horizontal, \.vertical\]|containerRelativeFrame\(\[\.vertical'
+check LOW "onGeometryChange / GeometryReader driving layout" \
+  "Fine if it measures a host whose size doesn't depend on the branch it selects; a loop if it measures the content it switches. Check each. See pitfall 1." \
+  'onGeometryChange\(for:'
 check LOW "Aspect-fill media" \
   "Can crop heavily on the ~1.42 aspect inner display; consider fit or a focal point." \
   'scaleAspectFill|contentMode:\s*\.fill|scaledToFill'
